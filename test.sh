@@ -6,7 +6,7 @@ echo "goroutines,time" > results.csv
 for i in 5 10 25 125
 do
     start=$(date +%s.%N)
-    $(go run torrent.go "http://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4" $i)
-    elapsed=$(echo "$(date +%s.%N) - $start"|bc)
+    $(go run torrent.go -n=$i)
+    elapsed=$(echo "$(date +%s.%N) - $start"|bc) #from online resource
     echo "$i,$elapsed" >> results.csv
 done
