@@ -1,5 +1,15 @@
 # go-download
 ## How to use:
-`go run torrent.go [mp4 url] [# goroutines]`
+Usage:
+	go run torrent.go [-n int] [-u string [-o string]] [-o string] [-v bool]
 
-mp4 url and # goroutines both optional - defaults to url="https://s3-us-west-1.amazonaws.com/mybucket-bennettmertz/myvideo.mp4" and goroutines=25
+Options:
+	-n	Number of goroutines to download from
+	-u	Url of resource to download [requires -f]
+	-o 	Output filename of specified resource
+	-v	Verify etag == md5 hash of output file
+
+## Examples:
+`go run torrent.go -v=true -o=bigfile.mp4 -n=10`
+`go run torrent.go`
+`go run torrent.go -v=false -u=http://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4 -o=bigbuchbunny.mp4`
