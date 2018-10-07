@@ -1,9 +1,11 @@
 # go-download
 ## How to use:
 Usage:
-	go run torrent.go [-n int] [-u string [-o string]] [-o string] [-v bool]
+
+`go run torrent.go [-n int] [-u string [-o string]] [-o string] [-v bool]`
 
 Options:
+
 	-n	Number of goroutines to download from
 	
 	-u	Url of resource to download [requires -f]
