@@ -15,9 +15,9 @@ import (
 var wg sync.WaitGroup
 
 func main() {
-	chunks := *flag.Int("num", 25, "number of goroutines to downlaod from") // must deference to get int value
-	url := *flag.String("url", "https://s3-us-west-2.amazonaws.com/getlantern-test/downloaded_video.mp4", "url to download from")
-	file_name := *flag.String("name", "download.mp4", "name of downloaded file")
+	chunks := *flag.Int("n", 25, "number of goroutines to downlaod from") // must deference to get int value
+	url := *flag.String("u", "https://s3-us-west-2.amazonaws.com/getlantern-test/downloaded_video.mp4", "url to download from")
+	file_name := *flag.String("o", "download.mp4", "name of downloaded file")
 	verify := *flag.Bool("v", true, "verify md5 hash of download against etag")
 
 	flag.Parse() // parse flags from os.Args[1:]
