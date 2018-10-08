@@ -7,8 +7,8 @@
 ### Options:
 
 	-n	Number of goroutines to download from
-	-u	Url of resource to download [requires -f]
 	-o 	Output filename of specified resource
+	-u	Url of resource to download [requires -o]
 	-v	Verify etag == md5 hash of output file
 
 ## Examples:
