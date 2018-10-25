@@ -15,30 +15,30 @@ import (
 var wg sync.WaitGroup
 
 func main() {
-	chunks := *flag.Int("n", 25, "number of goroutines to downlaod from") // must deference to get int value
-	url := *flag.String("u", "https://s3-us-west-2.amazonaws.com/getlantern-test/downloaded_video.mp4", "url to download from")
-	file_name := *flag.String("o", "download.mp4", "name of downloaded file")
-	verify := *flag.Bool("v", true, "verify md5 hash of download against etag")
+	chunks := flag.Int("n", 25, "number of goroutines to downlaod from")
+	url := flag.String("u", "https://s3-us-west-2.amazonaws.com/getlantern-test/downloaded_video.mp4", "url to download from")
+	file_name := flag.String("o", "download.mp4", "name of downloaded file")
+	verify := flag.Bool("v", true, "verify md5 hash of download against etag")
 
 	flag.Parse() // parse flags from os.Args[1:]
 
-	file, _ := os.Create(file_name)
+	file, _ := os.Create(*file_name)
 
-	size, etag := check_size(url)
-	etag = etag[1 : len(etag)-1]  // remove quotes from etag
-	for i := 0; i < chunks; i++ { // create all our goroutines to download over range [start:end]
+	size, etag := check_size(*url)
+	etag = etag[1 : len(etag)-1]   // remove quotes from etag
+	for i := 0; i < *chunks; i++ { // create all our goroutines to download over range [start:end]
 		wg.Add(1)
-		start := i * size / chunks
-		end := (i + 1) * size / chunks
+		start := i * size / *chunks
+		end := (i + 1) * size / *chunks
 		client := &http.Client{} // client has internal state (cached TCP connections) and so shoul dbe reused as needed [from go http/client documentation]
-		go download(url, start, end, file, client)
+		go download(*url, start, end, file, client)
 	}
 
 	wg.Wait()    // wait until all our goroutines close
 	file.Close() // able to be closed now that we've written to it
 
-	if verify {
-		verify_download(etag, file_name) // compare etag hash and md5 hash of downloaded file
+	if *verify {
+		verify_download(etag, *file_name) // compare etag hash and md5 hash of downloaded file
 	} else {
 		print("download finished \n")
 	}
