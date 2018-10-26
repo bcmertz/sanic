@@ -9,34 +9,66 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 )
 
-var wg sync.WaitGroup
+type chunk struct {
+	start   int
+	end     int
+	success bool
+}
 
 func main() {
+	// command line flags logic
 	chunks := flag.Int("n", 25, "number of goroutines to downlaod from")
 	url := flag.String("u", "https://s3-us-west-2.amazonaws.com/getlantern-test/downloaded_video.mp4", "url to download from")
 	file_name := flag.String("o", "download.mp4", "name of downloaded file")
 	verify := flag.Bool("v", true, "verify md5 hash of download against etag")
-
 	flag.Parse() // parse flags from os.Args[1:]
 
-	file, _ := os.Create(*file_name)
-
-	size, etag := check_size(*url)
-	etag = etag[1 : len(etag)-1]   // remove quotes from etag
-	for i := 0; i < *chunks; i++ { // create all our goroutines to download over range [start:end]
-		wg.Add(1)
-		start := i * size / *chunks
-		end := (i + 1) * size / *chunks
-		client := &http.Client{} // client has internal state (cached TCP connections) and so shoul dbe reused as needed [from go http/client documentation]
-		go download(*url, start, end, file, client)
+	// make the file to be written to
+	file, err := os.Create(*file_name)
+	if err != nil {
+		panic(err)
 	}
 
-	wg.Wait()    // wait until all our goroutines close
-	file.Close() // able to be closed now that we've written to it
+	// this code learns about the file to be downloaded and creates the queue of tasks to be completed
+	size, etag := check_size(*url)          // get file size in bytes
+	etag = etag[1 : len(etag)-1]            // remove quotes from etag
+	task_queue := make(chan chunk, *chunks) // our queue of byte ranges to download over
+	for i := 0; i < *chunks; i++ {          // create the queue of chunks
+		start := i * size / *chunks
+		end := (i + 1) * size / *chunks
+		chunk := chunk{start, end, false}
+		task_queue <- chunk
+	}
 
+	// this code handles spawning the goroutines and passing them their needed tools
+	client := &http.Client{}              // client has internal state (cached TCP connections) and so should be reused as needed
+	manager := make(chan chunk)           // channel the managing loop receives on to see update teh queue for failed downloads and verify when downloading is complete
+	num_goroutines := *chunks             // since goroutines receive tasks from the queue, we can specify any number of routines, unrelated to the number of tasks to be done
+	for i := 0; i < num_goroutines; i++ { // spawn desired number of goroutines
+		go download(*url, task_queue, manager, file, client)
+	}
+
+	// this code manages downloader goroutines and waits for them all to finish before it closes the queue channel (killing them)
+	// TODO: refactor into select, maybe not necessary but idk?
+	complete := false
+	counter := 0
+	for !complete {
+		resp := <-manager // blocking
+		if resp.success {
+			counter += 1
+		} else {
+			task_queue <- resp
+		}
+		if counter == *chunks {
+			complete = true
+			close(task_queue)
+		}
+	}
+
+	// download complete, close the file and verify its contents
+	file.Close() // able to be closed now that we've written to it
 	if *verify {
 		verify_download(etag, *file_name) // compare etag hash and md5 hash of downloaded file
 	} else {
@@ -44,30 +76,42 @@ func main() {
 	}
 }
 
-func download(url string, start, end int, file *os.File, client *http.Client) {
-	req, err := http.NewRequest("GET", url, nil) // create a new request so we can specify the download range header for the request
-	if err != nil {
-		panic(err)
-	}
+// this function specifies a goroutine which receives byte ranges to download from the queue and sends the repsonse channel updates on successful or unsuccessful downlaods
+func download(url string, queue chan chunk, response chan chunk, file *os.File, client *http.Client) {
+	//abort := func(task chunk) { // simple utility to update the manager we failed :(
+	//	response <- task
+	//}
+	for task := range queue { //loop over channel until queue empty
+		start := task.start
+		end := task.end
 
-	download_range := "bytes=" + strconv.Itoa(start) + "-" + strconv.Itoa(end) // format: "bytes=XXX-YYY"
-	req.Header.Set("Range", download_range)
+		req, err := http.NewRequest("GET", url, nil) // create a new request so we can specify the download range header for the request
+		if err != nil {
+			response <- task
+			return
+		}
 
-	resp, err := client.Do(req) // execute req (http request) over defined range
-	if err != nil {
-		print("download over byte range: ", start, " - ", end, " failed - resulting file will be incomplete \n")
-	}
+		download_range := "bytes=" + strconv.Itoa(start) + "-" + strconv.Itoa(end) // format: "bytes=XXX-YYY"
+		req.Header.Set("Range", download_range)
 
-	defer resp.Body.Close() // must close response
-	defer wg.Done()         // once goroutine has finished executing we can inform the waitgroup it has finished - prevent early waitgroup finish
-
-	body, err := ioutil.ReadAll(resp.Body) // get body []byte which we can write into file
-	if err != nil {
-		print("failed to extract part of file data from server response - output file will be incomplete \n")
-	}
-	_, err = file.WriteAt(body, int64(start))
-	if err != nil {
-		print("failed to write part of downloaded data - output file will be incomplete \n")
+		resp, err := client.Do(req) // execute req (http request) over defined range
+		if err != nil {
+			response <- task
+			return
+		}
+		defer resp.Body.Close()                // TODO: figure out a better way to close this without creating a stack of defers in this loop
+		body, err := ioutil.ReadAll(resp.Body) // get body []byte which we can write into file
+		if err != nil {
+			response <- task //TODO: some number of tries of should be done instead of redownloading
+			return
+		}
+		_, err = file.WriteAt(body, int64(start)) //TODO: os calls are POSIX thread safe but should probs add in mutex protection
+		if err != nil {
+			response <- task //TODO: some number of tries should be done instead of redownloading
+			return
+		}
+		task.success = true
+		response <- task
 	}
 }
 
