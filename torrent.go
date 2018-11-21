@@ -59,9 +59,11 @@ func main() {
 		if resp.success {
 			counter += 1
 		} else {
+			print("FAILED: ", resp.start, "-", resp.end, " \n")
 			task_queue <- resp
 		}
 		if counter == *chunks {
+			print("DONE \n")
 			complete = true
 			close(task_queue)
 		}
@@ -78,12 +80,14 @@ func main() {
 
 // this function specifies a goroutine which receives byte ranges to download from the queue and sends the repsonse channel updates on successful or unsuccessful downlaods
 func download(url string, queue chan chunk, response chan chunk, file *os.File, client *http.Client) {
-	//abort := func(task chunk) { // simple utility to update the manager we failed :(
-	//	response <- task
-	//}
-	for task := range queue { //loop over channel until queue empty
+	attempt := func(task chunk) {
 		start := task.start
 		end := task.end
+		//r := rand.Int31n(100) //simple test for error handling PASSED
+		//if r < 90 {
+		//	response <- task
+		//	return
+		//}
 
 		req, err := http.NewRequest("GET", url, nil) // create a new request so we can specify the download range header for the request
 		if err != nil {
@@ -107,11 +111,16 @@ func download(url string, queue chan chunk, response chan chunk, file *os.File, 
 		}
 		_, err = file.WriteAt(body, int64(start)) //TODO: os calls are POSIX thread safe but should probs add in mutex protection
 		if err != nil {
-			response <- task //TODO: some number of tries should be done instead of redownloading
+			response <- task //TODO: some number of tries should be done instead of restarting
 			return
 		}
 		task.success = true
 		response <- task
+
+	}
+
+	for task := range queue { //loop over channel until queue empty
+		attempt(task)
 	}
 }
 
@@ -136,7 +145,6 @@ func verify_download(etag string, file_name string) {
 
 	sum_md5 = md5.Sum(downloaded_bytes)
 	hash_sum = hex.EncodeToString(sum_md5[:]) // convert [16]byte to []byte, then convert to string
-
 	if hash_sum == etag {
 		print(file_name, " downloaded - hash verified", "\n")
 	} else {
