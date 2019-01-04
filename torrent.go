@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -24,7 +25,7 @@ func main() {
 	file_name := flag.String("o", "download.mp4", "name of downloaded file")
 	verify := flag.Bool("v", true, "verify md5 hash of download against etag")
 	flag.Parse() // parse flags from os.Args[1:]
-
+	print("chunks: ", *chunks, " \n")
 	// make the file to be written to
 	file, err := os.Create(*file_name)
 	if err != nil {
@@ -59,11 +60,11 @@ func main() {
 		if resp.success {
 			counter += 1
 		} else {
-			print("FAILED: ", resp.start, "-", resp.end, " \n")
+			//print("FAILED: ", resp.start, "-", resp.end, " \n")
 			task_queue <- resp
 		}
 		if counter == *chunks {
-			print("DONE \n")
+			//print("DONE \n")
 			complete = true
 			close(task_queue)
 		}
@@ -83,11 +84,11 @@ func download(url string, queue chan chunk, response chan chunk, file *os.File, 
 	attempt := func(task chunk) {
 		start := task.start
 		end := task.end
-		//r := rand.Int31n(100) //simple test for error handling PASSED
-		//if r < 90 {
-		//	response <- task
-		//	return
-		//}
+		r := rand.Int31n(100) //simple test for error handling PASSED
+		if r < 90 {
+			response <- task
+			return
+		}
 
 		req, err := http.NewRequest("GET", url, nil) // create a new request so we can specify the download range header for the request
 		if err != nil {
