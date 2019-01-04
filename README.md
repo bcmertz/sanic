@@ -20,4 +20,8 @@
 
 # Testing Perfomance - # of Goroutines
 
-Using a stable internet connection, run `bash test.sh` from a linux terminal, check for results in results.csv
+`go run server.go && ./test.sh`
+
+## Options:
+
+	--r Rate of throttling for the server
