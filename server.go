@@ -3,12 +3,20 @@ package main
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"flag"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func main() {
+	rate := flag.Float64("r", 200, "rate kb/s the server throttles traffic")
+	flag.Parse()
+
 	etag := `"` + etag("test.mp4") + `"` // because this is what aws does
 	mp4Handler := func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == "HEAD" {
@@ -17,8 +25,7 @@ func main() {
 			w.WriteHeader(http.StatusOK)
 			// fmt.Println("ETAG HEAD", etag)
 		} else if req.Method == "GET" {
-			// byteRange := req.Header.Get("Range")
-			// fmt.Println("range:", byteRange)
+			rate_limiter(req, rate)
 			http.ServeFile(w, req, "./test.mp4")
 		}
 	}
@@ -32,6 +39,18 @@ func main() {
 	// handler == nil (DefaultServeMux), Handle and HandleFunc add handlers to this
 	log.Print("Listening on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func rate_limiter(req *http.Request, rate *float64) {
+	RATE_KBS := *rate                                   // kb/s
+	reqrange := req.Header.Get("Range")[len("bytes="):] //remove bytes=
+	byteRange := strings.Split(reqrange, "-")
+	br1, _ := strconv.Atoi(byteRange[0])
+	br2, _ := strconv.Atoi(byteRange[1])
+	rangeint := br2 - br1
+	microsec := (float64(rangeint) * math.Pow10(6)) / (RATE_KBS * 1000.0)
+	sleep_for := time.Duration(float64(microsec)) * time.Microsecond
+	time.Sleep(sleep_for)
 }
 
 func etag(file_name string) string {
