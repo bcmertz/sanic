@@ -4,7 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -44,10 +44,10 @@ func main() {
 	}
 
 	// this code handles spawning the goroutines and passing them their needed tools
-	client := &http.Client{}              // client has internal state (cached TCP connections) and so should be reused as needed
-	manager := make(chan chunk)           // channel the managing loop receives on to see update teh queue for failed downloads and verify when downloading is complete
-	num_goroutines := *chunks             // since goroutines receive tasks from the queue, we can specify any number of routines, unrelated to the number of tasks to be done
-	for i := 0; i < num_goroutines; i++ { // spawn desired number of goroutines
+	client := &http.Client{}    // client has internal state (cached TCP connections) and so should be reused as needed
+	manager := make(chan chunk) // channel the managing loop receives on to see update teh queue for failed downloads and verify when downloading is complete
+	num_goroutines := *chunks   // since goroutines receive tasks from the queue, we can specify any number of routines, unrelated to the number of tasks to be done
+	for range num_goroutines {  // spawn desired number of goroutines
 		go download(*url, task_queue, manager, file, client)
 	}
 
@@ -104,8 +104,8 @@ func download(url string, queue chan chunk, response chan chunk, file *os.File, 
 			response <- task
 			return
 		}
-		defer resp.Body.Close()                // TODO: figure out a better way to close this without creating a stack of defers in this loop
-		body, err := ioutil.ReadAll(resp.Body) // get body []byte which we can write into file
+		defer resp.Body.Close()            // TODO: figure out a better way to close this without creating a stack of defers in this loop
+		body, err := io.ReadAll(resp.Body) // get body []byte which we can write into file
 		if err != nil {
 			response <- task //TODO: some number of tries of should be done instead of redownloading
 			return
@@ -139,7 +139,7 @@ func verify_download(etag string, file_name string) {
 	var hash_sum string
 	var sum_md5 [16]byte
 
-	downloaded_bytes, err := ioutil.ReadFile(file_name) // get downloaded_bytes []byte from newly created file
+	downloaded_bytes, err := os.ReadFile(file_name) // get downloaded_bytes []byte from newly created file
 	if err != nil {
 		print(file_name, " downloaded - could not open file to verify etag hash")
 	}
@@ -164,7 +164,7 @@ func depricated_verify_download(etag string, file_name string) {
 	format_etag := strings.Split(etag, "-") //commented out to remove strings import
 	var hash_sum string
 	var sum_md5 [16]byte
-	downloaded_bytes, err := ioutil.ReadFile(file_name)
+	downloaded_bytes, err := os.ReadFile(file_name)
 
 	if err != nil {
 		panic(err)
@@ -178,20 +178,20 @@ func depricated_verify_download(etag string, file_name string) {
 		size := len(downloaded_bytes)
 		chunk_size := 15*10 ^ 6 // test s3 chunk size of 15mb -- failed [as did many other tests]
 		remainder := size - ((num_chunks_upload - 1) * chunk_size)
-		partial_hash_sum := ""
+		var partial_hash_sum strings.Builder
 
-		for i := 0; i < num_chunks_upload; i++ {
+		for i := range num_chunks_upload {
 			start := i * chunk_size
 			end := (i + 1) * chunk_size
 			if num_chunks_upload-1 == i {
 				sum_md5 = md5.Sum(downloaded_bytes[len(downloaded_bytes)-remainder:])
-				partial_hash_sum += string(sum_md5[:])
+				partial_hash_sum.WriteString(string(sum_md5[:]))
 			} else {
 				sum_md5 = md5.Sum(downloaded_bytes[start:end])
-				partial_hash_sum += string(sum_md5[:])
+				partial_hash_sum.WriteString(string(sum_md5[:]))
 			}
 		}
-		sum_md5 = md5.Sum([]byte(partial_hash_sum))
+		sum_md5 = md5.Sum([]byte(partial_hash_sum.String()))
 		hash_sum = hex.EncodeToString(sum_md5[:]) + "-" + strconv.Itoa(num_chunks_upload)
 	}
 

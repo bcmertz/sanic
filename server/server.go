@@ -4,10 +4,10 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
-	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -56,7 +56,7 @@ func rate_limiter(req *http.Request, rate *float64) {
 func etag(file_name string) string {
 	var sum_md5 [16]byte
 
-	downloaded_bytes, _ := ioutil.ReadFile(file_name) // get downloaded_bytes []byte from newly created file
+	downloaded_bytes, _ := os.ReadFile(file_name) // get downloaded_bytes []byte from newly created file
 
 	sum_md5 = md5.Sum(downloaded_bytes)
 	return hex.EncodeToString(sum_md5[:]) // convert [16]byte to []byte, then convert to string

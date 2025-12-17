@@ -20,7 +20,7 @@
 
 # Testing Perfomance - # of Goroutines
 
-`go run server.go && ./test.sh`
+`go run server/server.go && ./test.sh`
 
 ## Options:
 
